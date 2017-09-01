@@ -1,7 +1,7 @@
 import train_frcnn
 
 options = {
-    'train_path': './train_data/frcnn_train.csv',
+    'train_path': '/data/nexar/train/faster_rcnn_imput.csv',
     'parser': 'simple',
     'num_rois': 32,
     'network': 'resnet50',
