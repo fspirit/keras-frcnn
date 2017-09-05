@@ -181,7 +181,7 @@ def load_config(options):
 
 
 def draw_box(all_dets, class_to_color, img, key, prob, bbox):
-    (real_x1, real_x2, real_y1, real_y2) = bbox
+    (real_x1, real_y1, real_x2, real_y2) = bbox
 
     cv2.rectangle(img, (real_x1, real_y1), (real_x2, real_y2),
                   (int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])), 2)
@@ -255,8 +255,8 @@ def run_test(options):
 
         print('Elapsed time = {}'.format(time.time() - st))
         print(all_dets)
-        cv2.imshow('img', img)
-        cv2.waitKey(0)
+#        cv2.imshow('img', img)
+#        cv2.waitKey(0)
         cv2.imwrite('./results_imgs/{}.png'.format(idx), img)
 
 
