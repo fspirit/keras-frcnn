@@ -212,8 +212,7 @@ def run_test(options):
     bbox_threshold = 0.8
 
     img_path = options['test_path']
-
-	detected_bboxes = []
+    detected_bboxes = []
 
     for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
@@ -256,7 +255,7 @@ def run_test(options):
 
                 draw_box(all_dets, class_to_color, img, class_name, new_probs[jk], bbox)
 
-				detected_bboxes.append({'image_filename': filepath, 'x0': x1, 'y0': y1, 'x1': x2, 'y1': y2,
+                detected_bboxes.append({'image_filename': filepath, 'x0': x1, 'y0': y1, 'x1': x2, 'y1': y2,
 								   'label': 'car', 'confidence': new_probs[jk]})
 
         print('Elapsed time = {}'.format(time.time() - st))
@@ -266,8 +265,8 @@ def run_test(options):
 #         cv2.imwrite('./results_imgs/{}.png'.format(idx), img)
 
 	result = pd.DataFrame(columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
-	result.append(detected_bboxes)
-	result.to_csv(options['bboxes_output'], index=False)
+    result.append(detected_bboxes)
+    result.to_csv(options['bboxes_output'], index=False)
 
 
 if __name__ == '__main__':
