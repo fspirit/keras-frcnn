@@ -11,6 +11,7 @@ from keras import backend as K
 from keras.layers import Input
 from keras.models import Model
 from keras_frcnn import roi_helpers
+import pandas as pd
 
 sys.setrecursionlimit(40000)
 
@@ -212,6 +213,8 @@ def run_test(options):
 
     img_path = options['test_path']
 
+	detected_bboxes = []
+
     for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
         if not img_name.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
@@ -253,11 +256,18 @@ def run_test(options):
 
                 draw_box(all_dets, class_to_color, img, class_name, new_probs[jk], bbox)
 
+				detected_bboxes.append({'image_filename': filepath, 'x0': x1, 'y0': y1, 'x1': x2, 'y1': y2,
+								   'label': 'car', 'confidence': new_probs[jk]})
+
         print('Elapsed time = {}'.format(time.time() - st))
         print(all_dets)
 #        cv2.imshow('img', img)
 #        cv2.waitKey(0)
-        cv2.imwrite('./results_imgs/{}.png'.format(idx), img)
+#         cv2.imwrite('./results_imgs/{}.png'.format(idx), img)
+
+	result = pd.DataFrame(columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
+	result.append(detected_bboxes)
+	result.to_csv(options['bboxes_output'], index=False)
 
 
 if __name__ == '__main__':
