@@ -16,19 +16,11 @@ from keras_frcnn import config, data_generators
 import keras_frcnn.roi_helpers as roi_helpers
 from keras.utils import generic_utils
 from keras_frcnn import losses as losses_f
+from keras_frcnn.simple_parser import get_data
 
 sys.setrecursionlimit(40000)
 
 def run(options):
-
-
-	if options['parser'] == 'pascal_voc':
-		from keras_frcnn.pascal_voc_parser import get_data
-	elif options['parser'] == 'simple':
-		from keras_frcnn.simple_parser import get_data
-	else:
-		raise ValueError("Parser must be one of 'pascal_voc' or 'simple'")
-
 
 	# pass the settings from the command line, and persist them in the config object
 	C = config.Config()
@@ -66,8 +58,6 @@ def run(options):
 
 	C.class_mapping = class_mapping
 
-	inv_map = {v: k for k, v in class_mapping.items()}
-
 	print('Training images per class:')
 	pprint.pprint(classes_count)
 	print('Num classes (including bg) = {}'.format(len(classes_count)))
@@ -79,7 +69,6 @@ def run(options):
 		print('Config has been written to {}, and can be loaded when testing to ensure correct results'.format(config_output_filename))
 
 	random.shuffle(all_imgs)
-
 	num_imgs = len(all_imgs)
 
 	train_imgs = [s for s in all_imgs if s['imageset'] == 'trainval']
@@ -87,7 +76,6 @@ def run(options):
 
 	print('Num train samples {}'.format(len(train_imgs)))
 	print('Num val samples {}'.format(len(val_imgs)))
-
 
 	data_gen_train = data_generators.get_anchor_gt(train_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='train')
 	data_gen_val = data_generators.get_anchor_gt(val_imgs, classes_count, C, nn.get_img_output_length,K.image_dim_ordering(), mode='val')
@@ -140,10 +128,7 @@ def run(options):
 
 	best_loss = np.Inf
 
-	class_mapping_inv = {v: k for k, v in class_mapping.items()}
 	print('Starting training')
-
-	vis = True
 
 	for epoch_num in range(num_epochs):
 
