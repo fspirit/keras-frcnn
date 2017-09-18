@@ -9,11 +9,6 @@ class Config:
 
 		self.network = 'resnet50'
 
-		# setting for data augmentation
-		self.use_horizontal_flips = False
-		self.use_vertical_flips = False
-		self.rot_90 = False
-
 		# anchor box scales
 		self.anchor_box_scales = [128, 256, 512]
 
@@ -32,8 +27,6 @@ class Config:
 
 		# stride at the RPN (this depends on the network configuration)
 		self.rpn_stride = 16
-
-		self.balanced_classes = False
 
 		# scaling the stdev
 		self.std_scaling = 4.0
@@ -55,4 +48,4 @@ class Config:
 		# https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_th_dim_ordering_th_kernels_notop.h5
 		# https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5
 
-		self.model_path = 'model_frcnn.vgg.hdf5'
+		self.model_path = 'model_frcnn.hdf5'

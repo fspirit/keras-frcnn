@@ -93,3 +93,6 @@ ENV/
 
 .idea
 .DS_Store
+/results_imgs/
+/test/
+*.csv

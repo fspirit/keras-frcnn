@@ -2,10 +2,10 @@ from __future__ import absolute_import
 import numpy as np
 import cv2
 import random
-import copy
-from . import data_augment
 import threading
-import itertools
+
+
+from torch.utils.data import DataLoader
 
 
 def union(au, bu, area_intersection):
@@ -50,33 +50,7 @@ def get_new_img_size(width, height, img_min_side=600):
 	return resized_width, resized_height
 
 
-class SampleSelector:
-	def __init__(self, class_count):
-		# ignore classes that have zero samples
-		self.classes = [b for b in class_count.keys() if class_count[b] > 0]
-		self.class_cycle = itertools.cycle(self.classes)
-		self.curr_class = next(self.class_cycle)
-
-	def skip_sample_for_balanced_class(self, img_data):
-
-		class_in_img = False
-
-		for bbox in img_data['bboxes']:
-
-			cls_name = bbox['class']
-
-			if cls_name == self.curr_class:
-				class_in_img = True
-				self.curr_class = next(self.class_cycle)
-				break
-
-		if class_in_img:
-			return False
-		else:
-			return True
-
-
-def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_length_calc_function):
+def calc_rpn(C, bboxes, width, height, resized_width, resized_height, img_length_calc_function):
 
 	downscale = float(C.rpn_stride)
 	anchor_sizes = C.anchor_box_scales
@@ -94,7 +68,7 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
 	y_is_box_valid = np.zeros((output_height, output_width, num_anchors))
 	y_rpn_regr = np.zeros((output_height, output_width, num_anchors * 4))
 
-	num_bboxes = len(img_data['bboxes'])
+	num_bboxes = len(bboxes)
 
 	num_anchors_for_bbox = np.zeros(num_bboxes).astype(int)
 	best_anchor_for_bbox = -1*np.ones((num_bboxes, 4)).astype(int)
@@ -104,12 +78,12 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
 
 	# get the GT box coordinates, and resize to account for image resizing
 	gta = np.zeros((num_bboxes, 4))
-	for bbox_num, bbox in enumerate(img_data['bboxes']):
+	for bbox_num, bbox in enumerate(bboxes):
 		# get the GT box coordinates, and resize to account for image resizing
-		gta[bbox_num, 0] = bbox['x1'] * (resized_width / float(width))
-		gta[bbox_num, 1] = bbox['x2'] * (resized_width / float(width))
-		gta[bbox_num, 2] = bbox['y1'] * (resized_height / float(height))
-		gta[bbox_num, 3] = bbox['y2'] * (resized_height / float(height))
+		gta[bbox_num, 0] = bbox['x0'] * (resized_width / float(width))
+		gta[bbox_num, 1] = bbox['x1'] * (resized_width / float(width))
+		gta[bbox_num, 2] = bbox['y0'] * (resized_height / float(height))
+		gta[bbox_num, 3] = bbox['y1'] * (resized_height / float(height))
 	
 	# rpn ground truth
 
@@ -159,30 +133,28 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
 							ty = (cy - cya) / (y2_anc - y1_anc)
 							tw = np.log((gta[bbox_num, 1] - gta[bbox_num, 0]) / (x2_anc - x1_anc))
 							th = np.log((gta[bbox_num, 3] - gta[bbox_num, 2]) / (y2_anc - y1_anc))
-						
-						if img_data['bboxes'][bbox_num]['class'] != 'bg':
 
-							# all GT boxes should be mapped to an anchor box, so we keep track of which anchor box was best
-							if curr_iou > best_iou_for_bbox[bbox_num]:
-								best_anchor_for_bbox[bbox_num] = [jy, ix, anchor_ratio_idx, anchor_size_idx]
-								best_iou_for_bbox[bbox_num] = curr_iou
-								best_x_for_bbox[bbox_num,:] = [x1_anc, x2_anc, y1_anc, y2_anc]
-								best_dx_for_bbox[bbox_num,:] = [tx, ty, tw, th]
+						# all GT boxes should be mapped to an anchor box, so we keep track of which anchor box was best
+						if curr_iou > best_iou_for_bbox[bbox_num]:
+							best_anchor_for_bbox[bbox_num] = [jy, ix, anchor_ratio_idx, anchor_size_idx]
+							best_iou_for_bbox[bbox_num] = curr_iou
+							best_x_for_bbox[bbox_num,:] = [x1_anc, x2_anc, y1_anc, y2_anc]
+							best_dx_for_bbox[bbox_num,:] = [tx, ty, tw, th]
 
-							# we set the anchor to positive if the IOU is >0.7 (it does not matter if there was another better box, it just indicates overlap)
-							if curr_iou > C.rpn_max_overlap:
-								bbox_type = 'pos'
-								num_anchors_for_bbox[bbox_num] += 1
-								# we update the regression layer target if this IOU is the best for the current (x,y) and anchor position
-								if curr_iou > best_iou_for_loc:
-									best_iou_for_loc = curr_iou
-									best_regr = (tx, ty, tw, th)
+						# we set the anchor to positive if the IOU is >0.7 (it does not matter if there was another better box, it just indicates overlap)
+						if curr_iou > C.rpn_max_overlap:
+							bbox_type = 'pos'
+							num_anchors_for_bbox[bbox_num] += 1
+							# we update the regression layer target if this IOU is the best for the current (x,y) and anchor position
+							if curr_iou > best_iou_for_loc:
+								best_iou_for_loc = curr_iou
+								best_regr = (tx, ty, tw, th)
 
-							# if the IOU is >0.3 and <0.7, it is ambiguous and no included in the objective
-							if C.rpn_min_overlap < curr_iou < C.rpn_max_overlap:
-								# gray zone between neg and pos
-								if bbox_type != 'pos':
-									bbox_type = 'neutral'
+						# if the IOU is >0.3 and <0.7, it is ambiguous and no included in the objective
+						if C.rpn_min_overlap < curr_iou < C.rpn_max_overlap:
+							# gray zone between neg and pos
+							if bbox_type != 'pos':
+								bbox_type = 'neutral'
 
 					# turn on or off outputs depending on IOUs
 					if bbox_type == 'neg':
@@ -270,32 +242,25 @@ def threadsafe_generator(f):
 		return threadsafe_iter(f(*a, **kw))
 	return g
 
-def get_anchor_gt(all_img_data, class_count, C, img_length_calc_function, backend, mode='train'):
+def get_anchor_gt(dataset, C, img_length_calc_function, backend):
 
 	# The following line is not useful with Python 3.5, it is kept for the legacy
 	# all_img_data = sorted(all_img_data)
 
-	sample_selector = SampleSelector(class_count)
+	dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4)
 
 	while True:
-		if mode == 'train':
-			random.shuffle(all_img_data)
 
-		for img_data in all_img_data:
+		for index, item in enumerate(dataloader):
 			try:
 
-				if C.balanced_classes and sample_selector.skip_sample_for_balanced_class(img_data):
-					continue
+				(img, bboxes) = item
 
-				# read in image, and optionally add augmentation
+				img = img[0].numpy()
 
-				if mode == 'train':
-					img_data_aug, x_img = data_augment.augment(img_data, C, augment=True)
-				else:
-					img_data_aug, x_img = data_augment.augment(img_data, C, augment=False)
 
-				(width, height) = (img_data_aug['width'], img_data_aug['height'])
-				(rows, cols, _) = x_img.shape
+				(width, height) = (img.shape[1], img.shape[0])
+				(rows, cols, _) = img.shape
 
 				assert cols == width
 				assert rows == height
@@ -304,21 +269,12 @@ def get_anchor_gt(all_img_data, class_count, C, img_length_calc_function, backen
 				(resized_width, resized_height) = get_new_img_size(width, height, C.im_size)
 
 				# resize the image so that smalles side is length = 600px
-				x_img = cv2.resize(x_img, (resized_width, resized_height), interpolation=cv2.INTER_CUBIC)
+				x_img = cv2.resize(img, (resized_width, resized_height), interpolation=cv2.INTER_CUBIC)
 
 				try:
-					y_rpn_cls, y_rpn_regr = calc_rpn(C, img_data_aug, width, height, resized_width, resized_height, img_length_calc_function)
+					y_rpn_cls, y_rpn_regr = calc_rpn(C, bboxes, width, height, resized_width, resized_height, img_length_calc_function)
 				except:
 					continue
-
-				# Zero-center by mean pixel, and preprocess image
-
-				x_img = x_img[:,:, (2, 1, 0)]  # BGR -> RGB
-				x_img = x_img.astype(np.float32)
-				x_img[:, :, 0] -= C.img_channel_mean[0]
-				x_img[:, :, 1] -= C.img_channel_mean[1]
-				x_img[:, :, 2] -= C.img_channel_mean[2]
-				x_img /= C.img_scaling_factor
 
 				x_img = np.transpose(x_img, (2, 0, 1))
 				x_img = np.expand_dims(x_img, axis=0)
@@ -330,7 +286,7 @@ def get_anchor_gt(all_img_data, class_count, C, img_length_calc_function, backen
 					y_rpn_cls = np.transpose(y_rpn_cls, (0, 2, 3, 1))
 					y_rpn_regr = np.transpose(y_rpn_regr, (0, 2, 3, 1))
 
-				yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data_aug
+				yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], bboxes
 
 			except Exception as e:
 				print(e)

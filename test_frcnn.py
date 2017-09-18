@@ -1,11 +1,13 @@
 from __future__ import division
-import os
+
 import cv2
 import numpy as np
 import sys
 import pickle
-from optparse import OptionParser
 import time
+
+from torch.utils.data import DataLoader
+
 from keras_frcnn import config
 from keras import backend as K
 from keras.layers import Input
@@ -30,26 +32,6 @@ def format_img_size(img, C):
         new_width = int(ratio * width)
         new_height = int(img_min_side)
     img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
-    return img, ratio
-
-
-def format_img_channels(img, C):
-    """ formats the image channels based on config """
-    img = img[:, :, (2, 1, 0)]
-    img = img.astype(np.float32)
-    img[:, :, 0] -= C.img_channel_mean[0]
-    img[:, :, 1] -= C.img_channel_mean[1]
-    img[:, :, 2] -= C.img_channel_mean[2]
-    img /= C.img_scaling_factor
-    img = np.transpose(img, (2, 0, 1))
-    img = np.expand_dims(img, axis=0)
-    return img
-
-
-def format_img(img, C):
-    """ formats an image for model prediction based on config """
-    img, ratio = format_img_size(img, C)
-    img = format_img_channels(img, C)
     return img, ratio
 
 
@@ -158,21 +140,13 @@ def construct_models(C, class_mapping, options):
     return model_classifier, model_rpn
 
 
-def read_class_mapping_from_config(C):
-    class_mapping = C.class_mapping
+def read_class_mapping_from_config(class_mapping):
     if 'bg' not in class_mapping:
         class_mapping['bg'] = len(class_mapping)
-    class_mapping = {v: k for k, v in class_mapping.items()}
-    print(class_mapping)
-    class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
-    return class_mapping, class_to_color
-
-
-def turn_off_augmentation(C):
-    C.use_horizontal_flips = False
-    C.use_vertical_flips = False
-    C.rot_90 = False
-
+    reversed_class_mapping = {v: k for k, v in class_mapping.items()}
+    # print(reversed_class_mapping)
+    class_to_color = {reversed_class_mapping[v]: np.random.randint(0, 255, 3) for v in reversed_class_mapping}
+    return reversed_class_mapping, class_to_color
 
 def load_config(options):
     config_output_filename = options['config_filename']
@@ -200,32 +174,38 @@ def draw_box(all_dets, class_to_color, img, key, prob, bbox):
     cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
 
-def run_test(options):
-    C = load_config(options)
+def run_test(options, dataset):
 
-    turn_off_augmentation(C)
+    C = config.Config()
 
-    class_mapping, class_to_color = read_class_mapping_from_config(C)
+    class_mapping, class_to_color = read_class_mapping_from_config({'car': 0})
 
     model_classifier, model_rpn = construct_models(C, class_mapping, options)
 
     bbox_threshold = 0.8
 
-    img_path = options['test_path']
     detected_bboxes = []
 
-    for idx, img_name in enumerate(sorted(os.listdir(img_path))):
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
 
-        if not img_name.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
-            continue
+    for index, item in enumerate(dataloader):
 
-        print(img_name)
+        img_batch, boxes_batch, filepath_batch = item['img'], item['boxes'], item['image_path']
+
+        img = img_batch[0].numpy()
+        filepath = filepath_batch[0]
+        boxes = boxes_batch[0].numpy()
+
+        # print img_batch.shape
+        # print filepath
+        # print boxes_batch.shape
+
         st = time.time()
-        filepath = os.path.join(img_path, img_name)
 
-        img = cv2.imread(filepath)
+        X, ratio = format_img_size(img, C)
 
-        X, ratio = format_img(img, C)
+        X = np.transpose(X, (2, 0, 1))
+        X = np.expand_dims(X, axis=0)
 
         if K.image_dim_ordering() == 'tf':
             X = np.transpose(X, (0, 2, 3, 1))
@@ -242,12 +222,15 @@ def run_test(options):
         # apply the spatial pyramid pooling to the proposed regions
         class_bboxes, class_probs = find_objects(C, F, R, bbox_threshold, class_mapping, model_classifier)
 
+        print("{0} boxes found".format(len(class_bboxes)))
+
         all_dets = []
 
         for class_name in class_bboxes:
             new_boxes, new_probs = roi_helpers.non_max_suppression_fast(np.array(class_bboxes[class_name]),
                                                                         np.array(class_probs[class_name]),
                                                                         overlap_thresh=0.5)
+
             for jk in range(new_boxes.shape[0]):
                 (x1, y1, x2, y2) = new_boxes[jk, :]
 
@@ -255,35 +238,50 @@ def run_test(options):
 
                 draw_box(all_dets, class_to_color, img, class_name, new_probs[jk], bbox)
 
-                detected_bboxes.append({'image_filename': filepath, 'x0': x1, 'y0': y1, 'x1': x2, 'y1': y2,
-								   'label': 'car', 'confidence': new_probs[jk]})
+                (real_x0, real_y0, real_x1, real_y1) = bbox
+                detected_bboxes.append({'image_filename': filepath, 'x0': real_x0, 'y0': real_y0,
+                                        'x1': real_x1, 'y1': real_y1,
+								        'label': 'car', 'confidence': new_probs[jk]})
 
-        print('Elapsed time = {}'.format(time.time() - st))
-        print(all_dets)
-#        cv2.imshow('img', img)
-#        cv2.waitKey(0)
-#         cv2.imwrite('./results_imgs/{}.png'.format(idx), img)
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # cv2.imwrite("./results_imgs/test{0}.jpg".format(index), img)
+        # print('Elapsed time = {}'.format(time.time() - st))
 
-	result = pd.DataFrame(columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
-    result.append(detected_bboxes)
-    result.to_csv(options['bboxes_output'], index=False)
+    result = pd.DataFrame(columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
+    if len(detected_bboxes) != 0:
+        result = result.append(detected_bboxes)
+        result.to_csv(options['bboxes_output'], index=False)
+    else:
+        print "No boxes found!"
 
+# if __name__ == "__main__":
 
-if __name__ == '__main__':
-    parser = OptionParser()
+    # import nexar2_pipeline
+    #
+    # dataset = nexar2_pipeline.Nexar2ValidationDataset('/Users/fs/Documents/Code/keras-frcnn/train_data/train_boxes.csv',
+    #                                                   '/Users/fs/Documents/Code/keras-frcnn/train_data/img',
+    #                                                   './val_filenames_test.txt')
 
-    parser.add_option("-p", "--path", dest="test_path", help="Path to test data.")
-    parser.add_option("-n", "--num_rois", dest="num_rois",
-                      help="Number of ROIs per iteration. Higher means more memory use.", default=32)
-    parser.add_option("--config_filename", dest="config_filename", help=
-    "Location to read the metadata related to the training (generated when training).",
-                      default="config.pickle")
-    parser.add_option("--network", dest="network", help="Base network to use. Supports vgg or resnet50.",
-                      default='resnet50')
+    # options = {
+    #     'num_rois': 32,
+    #     'network': 'resnet50',
+    #     'config_filename': './config.pickle',
+    #     'bboxes_output': './validation_eval_input.csv'
+    # }
+    #
+    # run_test(options, dataset)
 
-    (options, args) = parser.parse_args()
-
-    if not options.test_path:  # if filename is not given
-        parser.error('Error: path to test data must be specified. Pass --path to command line')
-
-    run_test(vars(options))
+    # detected_bboxes = [{'confidence': 0.80713397, 'label': 'car', 'y1': 336, 'y0': 304, 'x0': 416, 'x1': 464,
+    #                     'image_filename': '/Users/fs/Documents/Code/keras-frcnn/train_data/img/0cf9a7c1-9425-47f3-8eba-d8544a46613d.mov-0001.jpg'}]
+    # result = pd.DataFrame(columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
+    #
+    #
+    #
+    # if len(detected_bboxes) != 0:
+    #     result = result.append(detected_bboxes)
+    #     # for detected_box in detected_bboxes:
+    #     #     inserto = pd.Series(detected_box)
+    #     #     print inserto
+    #     #     result.append(inserto, ignore_index=True)
+    #     result.to_csv('./validation_eval_input.csv', index=False)
+    # print result.info()

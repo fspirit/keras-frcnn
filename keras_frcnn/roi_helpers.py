@@ -16,10 +16,10 @@ def calc_iou(R, img_data, C, class_mapping):
 
 	for bbox_num, bbox in enumerate(bboxes):
 		# get the GT box coordinates, and resize to account for image resizing
-		gta[bbox_num, 0] = int(round(bbox['x1'] * (resized_width / float(width))/C.rpn_stride))
-		gta[bbox_num, 1] = int(round(bbox['x2'] * (resized_width / float(width))/C.rpn_stride))
-		gta[bbox_num, 2] = int(round(bbox['y1'] * (resized_height / float(height))/C.rpn_stride))
-		gta[bbox_num, 3] = int(round(bbox['y2'] * (resized_height / float(height))/C.rpn_stride))
+		gta[bbox_num, 0] = int(round(bbox['x0'] * (resized_width / float(width))/C.rpn_stride))
+		gta[bbox_num, 1] = int(round(bbox['x1'] * (resized_width / float(width))/C.rpn_stride))
+		gta[bbox_num, 2] = int(round(bbox['y0'] * (resized_height / float(height))/C.rpn_stride))
+		gta[bbox_num, 3] = int(round(bbox['y1'] * (resized_height / float(height))/C.rpn_stride))
 
 	x_roi = []
 	y_class_num = []
@@ -54,7 +54,7 @@ def calc_iou(R, img_data, C, class_mapping):
 				# hard negative example
 				cls_name = 'bg'
 			elif C.classifier_max_overlap <= best_iou:
-				cls_name = bboxes[best_bbox]['class']
+				cls_name = 'car'
 				cxg = (gta[best_bbox, 0] + gta[best_bbox, 1]) / 2.0
 				cyg = (gta[best_bbox, 2] + gta[best_bbox, 3]) / 2.0
 
