@@ -146,6 +146,9 @@ class Nexar2TrainDataset(Nexar2DatasetBase):
 
         img = self._normalize(img)
 
+        bboxes = [[b['x0'], b['y0'], b['x1'], b['y1']] for b in bboxes]
+        bboxes = np.array(bboxes)
+
         return dict(img=img, boxes=bboxes)
 
 class Nexar2ValidationDataset(Nexar2DatasetBase):

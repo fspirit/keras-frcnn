@@ -254,9 +254,14 @@ def get_anchor_gt(dataset, C, img_length_calc_function, backend):
 		for index, item in enumerate(dataloader):
 			try:
 
-				(img, bboxes) = item
+				img_batch, boxes_batch = item['img'], item['boxes']
 
-				img = img[0].numpy()
+				img = img_batch[0].numpy()
+				boxes = boxes_batch[0]
+
+				# print boxes
+				bboxes = [dict(x0=box[0], y0=box[1], x1=box[2], y1=box[3]) for box in boxes]
+				# print bboxes
 
 
 				(width, height) = (img.shape[1], img.shape[0])

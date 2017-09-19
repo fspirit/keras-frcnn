@@ -9,11 +9,12 @@ from keras import backend as K
 from keras.optimizers import Adam
 from keras.layers import Input
 from keras.models import Model
-from keras_frcnn import config, data_generators
+from keras_frcnn import config, data_generators, vgg, resnet
 
 import keras_frcnn.roi_helpers as roi_helpers
 from keras.utils import generic_utils
 from keras_frcnn import losses as losses_f
+
 
 import logging
 logging.basicConfig(filename='train.log', level=logging.DEBUG)
@@ -30,12 +31,13 @@ def run(options, dataset):
 	C.model_path = options['output_weight_path']
 	C.num_rois = int(options['num_rois'])
 
+
 	if options['network'] == 'vgg':
 		C.network = 'vgg'
-		from keras_frcnn import vgg as nn
+		nn = vgg.VGG16()
 	elif options['network'] == 'resnet50':
-		from keras_frcnn import resnet as nn
 		C.network = 'resnet50'
+		nn = resnet.Resnet50()
 	else:
 		log('Not a valid model')
 		raise ValueError
@@ -55,7 +57,7 @@ def run(options, dataset):
 
 	data_gen_train = data_generators.get_anchor_gt(dataset, C, nn.get_img_output_length, K.image_dim_ordering())
 
-	model_all, model_classifier, model_rpn = construct_models(C)
+	model_all, model_classifier, model_rpn = construct_models(C, nn)
 
 	epoch_length = 1000
 	num_epochs = int(options['num_epochs'])
@@ -195,7 +197,7 @@ def select_roi_samples(C, Y1, rpn_accuracy_for_epoch, rpn_accuracy_rpn_monitor):
 	return sel_samples
 
 
-def construct_models(C):
+def construct_models(C, nn):
 	if K.image_dim_ordering() == 'th':
 		input_shape_img = (3, None, None)
 	else:
@@ -235,10 +237,14 @@ def construct_models(C):
 
 if __name__ == '__main__':
 	import nexar2_pipeline
-
-	dataset = nexar2_pipeline.Nexar2TrainDataset('/datadrive/nexar/train_boxes.csv',
-	                                            '/datadrive/nexar/train/images',
-	                                            './val_filenames_test.txt')
+    #
+	# dataset = nexar2_pipeline.Nexar2TrainDataset('/datadrive/nexar/train_boxes.csv',
+	#                                             '/datadrive/nexar/train/images',
+	#                                             './val_filenames_test.txt')
+	log('Loading dataset.')
+	dataset = nexar2_pipeline.Nexar2TrainDataset('/Users/fs/Documents/Code/keras-frcnn/train_data/train_boxes.csv',
+	                                            '/Users/fs/Documents/Code/keras-frcnn/train_data/img',
+	                                            './validation.filename.txt')
 
 	options = {
 	    'num_rois': 32,
@@ -248,4 +254,5 @@ if __name__ == '__main__':
 		'output_weight_path': './model_resnet50_nexar2ds_aug.hdf5'
 	}
 
+	log('Starting training.')
 	run(options, dataset)
