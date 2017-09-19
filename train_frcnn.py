@@ -224,3 +224,19 @@ def construct_models(C):
 	model_all.compile(optimizer='sgd', loss='mae')
 
 	return model_all, model_classifier, model_rpn
+
+if __name__ == '__main__':
+	import nexar2_pipeline
+
+	dataset = nexar2_pipeline.Nexar2TrainDataset('/datadrive/nexar/train_boxes.csv',
+	                                            '/datadrive/nexar/train/images',
+	                                            './val_filenames_test.txt')
+
+	options = {
+	    'num_rois': 32,
+	    'network': 'resnet50',
+	    'config_filename': './config.pickle',
+		'output_weight_path': './model_resnet50_nexar2ds_aug.hdf5'
+	}
+
+	run(options, dataset)
