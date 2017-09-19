@@ -15,7 +15,14 @@ import keras_frcnn.roi_helpers as roi_helpers
 from keras.utils import generic_utils
 from keras_frcnn import losses as losses_f
 
+import logging
+logging.basicConfig(filename='train.log', level=logging.DEBUG)
+
 sys.setrecursionlimit(40000)
+
+def log(msg):
+	print(msg)
+	logging.info(msg)
 
 def run(options, dataset):
 	C = config.Config()
@@ -30,7 +37,7 @@ def run(options, dataset):
 		from keras_frcnn import resnet as nn
 		C.network = 'resnet50'
 	else:
-		print('Not a valid model')
+		log('Not a valid model')
 		raise ValueError
 
 	# check if weight path was passed via command line
@@ -44,7 +51,7 @@ def run(options, dataset):
 
 	with open(config_output_filename, 'wb') as config_f:
 		pickle.dump(C,config_f)
-		print('Config has been written to {}, and can be loaded when testing to ensure correct results'.format(config_output_filename))
+		log('Config has been written to {}, and can be loaded when testing to ensure correct results'.format(config_output_filename))
 
 	data_gen_train = data_generators.get_anchor_gt(dataset, C, nn.get_img_output_length, K.image_dim_ordering())
 
@@ -61,12 +68,12 @@ def run(options, dataset):
 
 	best_loss = np.Inf
 
-	print('Starting training')
+	log('Starting training')
 
 	for epoch_num in range(num_epochs):
 
 		progbar = generic_utils.Progbar(epoch_length)
-		print('Epoch {}/{}'.format(epoch_num + 1, num_epochs))
+		log('Epoch {}/{}'.format(epoch_num + 1, num_epochs))
 
 		while True:
 			try:
@@ -74,9 +81,9 @@ def run(options, dataset):
 				if len(rpn_accuracy_rpn_monitor) == epoch_length and C.verbose:
 					mean_overlapping_bboxes = float(sum(rpn_accuracy_rpn_monitor))/len(rpn_accuracy_rpn_monitor)
 					rpn_accuracy_rpn_monitor = []
-					print('Average number of overlapping bounding boxes from RPN = {} for {} previous iterations'.format(mean_overlapping_bboxes, epoch_length))
+					log('Average number of overlapping bounding boxes from RPN = {} for {} previous iterations'.format(mean_overlapping_bboxes, epoch_length))
 					if mean_overlapping_bboxes == 0:
-						print('RPN is not producing bounding boxes that overlap the ground truth boxes. Check RPN settings or keep training.')
+						log('RPN is not producing bounding boxes that overlap the ground truth boxes. Check RPN settings or keep training.')
 
 				X, Y, bboxes = next(data_gen_train)
 
@@ -116,13 +123,14 @@ def run(options, dataset):
 					rpn_accuracy_for_epoch = []
 
 					if C.verbose:
-						print('Mean number of bounding boxes from RPN overlapping ground truth boxes: {}'.format(mean_overlapping_bboxes))
-						print('Classifier accuracy for bounding boxes from RPN: {}'.format(class_acc))
-						print('Loss RPN classifier: {}'.format(loss_rpn_cls))
-						print('Loss RPN regression: {}'.format(loss_rpn_regr))
-						print('Loss Detector classifier: {}'.format(loss_class_cls))
-						print('Loss Detector regression: {}'.format(loss_class_regr))
-						print('Elapsed time: {}'.format(time.time() - start_time))
+
+						log('Mean number of bounding boxes from RPN overlapping ground truth boxes: {}'.format(mean_overlapping_bboxes))
+						log('Classifier accuracy for bounding boxes from RPN: {}'.format(class_acc))
+						log('Loss RPN classifier: {}'.format(loss_rpn_cls))
+						log('Loss RPN regression: {}'.format(loss_rpn_regr))
+						log('Loss Detector classifier: {}'.format(loss_class_cls))
+						log('Loss Detector regression: {}'.format(loss_class_regr))
+						log('Elapsed time: {}'.format(time.time() - start_time))
 
 					curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
 					iter_num = 0
@@ -130,7 +138,7 @@ def run(options, dataset):
 
 					if curr_loss < best_loss:
 						if C.verbose:
-							print('Total loss decreased from {} to {}, saving weights'.format(best_loss,curr_loss))
+							log('Total loss decreased from {} to {}, saving weights'.format(best_loss,curr_loss))
 						best_loss = curr_loss
 						model_all.save_weights(C.model_path)
 
@@ -139,7 +147,7 @@ def run(options, dataset):
 			except Exception as e:
 				continue
 
-	print('Training complete, exiting.')
+	log('Training complete, exiting.')
 
 
 def record_losses(iter_num, loss_class, loss_rpn, losses):
@@ -207,11 +215,11 @@ def construct_models(C):
 	model_all = Model([img_input, roi_input], rpn[:2] + classifier)
 
 	try:
-		print('loading weights from {}'.format(C.base_net_weights))
+		log('loading weights from {}'.format(C.base_net_weights))
 		model_rpn.load_weights(C.base_net_weights, by_name=True)
 		model_classifier.load_weights(C.base_net_weights, by_name=True)
 	except:
-		print('Could not load pretrained model weights. Weights can be found in the keras application folder \
+		log('Could not load pretrained model weights. Weights can be found in the keras application folder \
 			https://github.com/fchollet/keras/tree/master/keras/applications')
 
 	optimizer = Adam(lr=1e-5)
@@ -234,6 +242,7 @@ if __name__ == '__main__':
 
 	options = {
 	    'num_rois': 32,
+		'num_epochs' : 100,
 	    'network': 'resnet50',
 	    'config_filename': './config.pickle',
 		'output_weight_path': './model_resnet50_nexar2ds_aug.hdf5'
