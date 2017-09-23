@@ -50,7 +50,10 @@ def get_new_img_size(width, height, img_min_side=600):
 	return resized_width, resized_height
 
 
-def calc_rpn(C, bboxes, width, height, resized_width, resized_height, img_length_calc_function):
+def calc_rpn(C, bboxes, width, height, resized_width, resized_height, nn):
+
+	# print 'calc_rpn'
+	# print C, bboxes, width, height, resized_width, resized_height, nn
 
 	downscale = float(C.rpn_stride)
 	anchor_sizes = C.anchor_box_scales
@@ -59,7 +62,7 @@ def calc_rpn(C, bboxes, width, height, resized_width, resized_height, img_length
 
 	# calculate the output map size based on the network architecture
 
-	(output_width, output_height) = img_length_calc_function(resized_width, resized_height)
+	(output_width, output_height) = nn.get_img_output_length(resized_width, resized_height)
 
 	n_anchratios = len(anchor_ratios)
 	
@@ -86,11 +89,14 @@ def calc_rpn(C, bboxes, width, height, resized_width, resized_height, img_length
 		gta[bbox_num, 3] = bbox['y1'] * (resized_height / float(height))
 	
 	# rpn ground truth
+	# print 'GTA'
+	# print gta
 
 	for anchor_size_idx in range(len(anchor_sizes)):
 		for anchor_ratio_idx in range(n_anchratios):
 			anchor_x = anchor_sizes[anchor_size_idx] * anchor_ratios[anchor_ratio_idx][0]
-			anchor_y = anchor_sizes[anchor_size_idx] * anchor_ratios[anchor_ratio_idx][1]	
+			anchor_y = anchor_sizes[anchor_size_idx] * anchor_ratios[anchor_ratio_idx][1]
+
 			
 			for ix in range(output_width):					
 				# x-coordinates of the current anchor box	
@@ -171,6 +177,11 @@ def calc_rpn(C, bboxes, width, height, resized_width, resized_height, img_length
 
 	# we ensure that every bbox has at least one positive RPN region
 
+	print 'best iou'
+	print best_iou_for_bbox
+	print 'best anchor'
+	print best_anchor_for_bbox
+
 	for idx in range(num_anchors_for_bbox.shape[0]):
 		if num_anchors_for_bbox[idx] == 0:
 			# no box with an IOU greater than zero ...
@@ -188,6 +199,9 @@ def calc_rpn(C, bboxes, width, height, resized_width, resized_height, img_length
 
 	y_rpn_overlap = np.transpose(y_rpn_overlap, (2, 0, 1))
 	y_rpn_overlap = np.expand_dims(y_rpn_overlap, axis=0)
+
+	print "\nrpn_overlap"
+	print np.sum(y_rpn_overlap)
 
 	y_is_box_valid = np.transpose(y_is_box_valid, (2, 0, 1))
 	y_is_box_valid = np.expand_dims(y_is_box_valid, axis=0)
@@ -242,7 +256,7 @@ def threadsafe_generator(f):
 		return threadsafe_iter(f(*a, **kw))
 	return g
 
-def get_anchor_gt(dataset, C, img_length_calc_function, backend):
+def get_anchor_gt(dataset, C, nn, backend):
 
 	# The following line is not useful with Python 3.5, it is kept for the legacy
 	# all_img_data = sorted(all_img_data)
@@ -263,8 +277,8 @@ def get_anchor_gt(dataset, C, img_length_calc_function, backend):
 				bboxes = [dict(x0=box[0], y0=box[1], x1=box[2], y1=box[3]) for box in boxes]
 				# print bboxes
 
-
 				(width, height) = (img.shape[1], img.shape[0])
+
 				(rows, cols, _) = img.shape
 
 				assert cols == width
@@ -277,7 +291,9 @@ def get_anchor_gt(dataset, C, img_length_calc_function, backend):
 				x_img = cv2.resize(img, (resized_width, resized_height), interpolation=cv2.INTER_CUBIC)
 
 				try:
-					y_rpn_cls, y_rpn_regr = calc_rpn(C, bboxes, width, height, resized_width, resized_height, img_length_calc_function)
+					y_rpn_cls, y_rpn_regr = calc_rpn(C, bboxes, width, height, resized_width, resized_height, nn)
+					# print 'y_rpn_cls '
+					# print y_rpn_cls
 				except:
 					continue
 
@@ -291,7 +307,7 @@ def get_anchor_gt(dataset, C, img_length_calc_function, backend):
 					y_rpn_cls = np.transpose(y_rpn_cls, (0, 2, 3, 1))
 					y_rpn_regr = np.transpose(y_rpn_regr, (0, 2, 3, 1))
 
-				yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], bboxes
+				yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], dict(bboxes=bboxes, width=width, height=height)
 
 			except Exception as e:
 				print(e)

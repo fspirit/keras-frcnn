@@ -55,7 +55,7 @@ def run(options, dataset):
 		pickle.dump(C,config_f)
 		log('Config has been written to {}, and can be loaded when testing to ensure correct results'.format(config_output_filename))
 
-	data_gen_train = data_generators.get_anchor_gt(dataset, C, nn.get_img_output_length, K.image_dim_ordering())
+	data_gen_train = data_generators.get_anchor_gt(dataset, C, nn, K.image_dim_ordering())
 
 	model_all, model_classifier, model_rpn = construct_models(C, nn)
 
@@ -87,7 +87,8 @@ def run(options, dataset):
 					if mean_overlapping_bboxes == 0:
 						log('RPN is not producing bounding boxes that overlap the ground truth boxes. Check RPN settings or keep training.')
 
-				X, Y, bboxes = next(data_gen_train)
+				X, Y, image_data = next(data_gen_train)
+				bboxes = image_data['bboxes']
 
 				loss_rpn = model_rpn.train_on_batch(X, Y)
 
@@ -96,7 +97,7 @@ def run(options, dataset):
 				R = roi_helpers.rpn_to_roi(P_rpn[0], P_rpn[1], C, K.image_dim_ordering(), use_regr=True, overlap_thresh=0.7, max_boxes=300)
 
 				# note: Calc_iou converts from (x1,y1,x2,y2) to (x,y,w,h) format
-				X2, Y1, Y2, IouS = roi_helpers.calc_iou(R, dict(bboxes=bboxes, width=X.shape[1], height=X.shape[0]), C, {'car':0, 'bg':1})
+				X2, Y1, Y2, IouS = roi_helpers.calc_iou(R, image_data, C, {'car':0, 'bg':1})
 
 				if X2 is None:
 					rpn_accuracy_rpn_monitor.append(0)
@@ -242,13 +243,13 @@ if __name__ == '__main__':
 	#                                             '/datadrive/nexar/train/images',
 	#                                             './val_filenames_test.txt')
 	log('Loading dataset.')
-	dataset = nexar2_pipeline.Nexar2TrainDataset('/Users/fs/Documents/Code/keras-frcnn/train_data/train_boxes.csv',
+	dataset = nexar2_pipeline.Nexar2TrainDataset('/Users/fs/Documents/keras-frcnn/input.csv',
 	                                            '/Users/fs/Documents/Code/keras-frcnn/train_data/img',
 	                                            './validation.filename.txt')
 
 	options = {
 	    'num_rois': 32,
-		'num_epochs' : 100,
+		'num_epochs' : 1,
 	    'network': 'resnet50',
 	    'config_filename': './config.pickle',
 		'output_weight_path': './model_resnet50_nexar2ds_aug.hdf5'
