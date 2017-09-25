@@ -5,15 +5,15 @@ import numpy as np
 import sys
 import pickle
 import time
+import pandas as pd
 
 from torch.utils.data import DataLoader
 
-from keras_frcnn import config
+from keras_frcnn import config, resnet, vgg, roi_helpers
+
 from keras import backend as K
 from keras.layers import Input
 from keras.models import Model
-from keras_frcnn import roi_helpers
-import pandas as pd
 
 sys.setrecursionlimit(40000)
 
@@ -97,9 +97,9 @@ def find_objects(C, F, R, bbox_threshold, class_mapping, model_classifier):
 
 def construct_models(C, class_mapping, options):
     if C.network == 'resnet50':
-        import keras_frcnn.resnet as nn
+        nn = resnet.Resnet50()
     elif C.network == 'vgg':
-        import keras_frcnn.vgg as nn
+        nn = vgg.VGG16()
 
     C.num_rois = int(options['num_rois'])
 
