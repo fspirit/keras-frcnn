@@ -6,6 +6,7 @@ import sys
 import pickle
 import time
 import pandas as pd
+import os
 
 from torch.utils.data import DataLoader
 
@@ -14,6 +15,8 @@ from keras_frcnn import config, resnet, vgg, roi_helpers
 from keras import backend as K
 from keras.layers import Input
 from keras.models import Model
+
+import datasets
 
 sys.setrecursionlimit(40000)
 
@@ -190,17 +193,13 @@ def run_test(options, dataset):
 
     for index, item in enumerate(dataloader):
 
-        img_batch, boxes_batch, filepath_batch = item['img'], item['boxes'], item['image_path']
+        img_batch, filepath_batch = item['img'],  item['image_path']
 
         img = img_batch[0].numpy()
         filepath = filepath_batch[0]
-        boxes = boxes_batch[0].numpy()
 
         # print img_batch.shape
-        # print filepath
-        # print boxes_batch.shape
-
-        st = time.time()
+        print filepath
 
         X, ratio = format_img_size(img, C)
 
@@ -248,40 +247,29 @@ def run_test(options, dataset):
         # print('Elapsed time = {}'.format(time.time() - st))
 
     result = pd.DataFrame(columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
+
     if len(detected_bboxes) != 0:
         result = result.append(detected_bboxes)
+        if 'cut_path' in options and options['cut_path'] is True:
+            result['image_filename'] = result['image_filename'].apply(lambda f: os.path.basename(f))
         result.to_csv(options['bboxes_output'], index=False)
     else:
         print "No boxes found!"
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
-    # import nexar2_pipeline
-    #
-    # dataset = nexar2_pipeline.Nexar2ValidationDataset('/Users/fs/Documents/Code/keras-frcnn/train_data/train_boxes.csv',
-    #                                                   '/Users/fs/Documents/Code/keras-frcnn/train_data/img',
-    #                                                   './val_filenames_test.txt')
+    test_images_path = '/Users/fs/Documents/Code/keras-frcnn/test_data'
 
-    # options = {
-    #     'num_rois': 32,
-    #     'network': 'resnet50',
-    #     'config_filename': './config.pickle',
-    #     'bboxes_output': './validation_eval_input.csv'
-    # }
-    #
-    # run_test(options, dataset)
+    dataset = datasets.Nexar2TestDataset(test_images_path)
 
-    # detected_bboxes = [{'confidence': 0.80713397, 'label': 'car', 'y1': 336, 'y0': 304, 'x0': 416, 'x1': 464,
-    #                     'image_filename': '/Users/fs/Documents/Code/keras-frcnn/train_data/img/0cf9a7c1-9425-47f3-8eba-d8544a46613d.mov-0001.jpg'}]
-    # result = pd.DataFrame(columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
-    #
-    #
-    #
-    # if len(detected_bboxes) != 0:
-    #     result = result.append(detected_bboxes)
-    #     # for detected_box in detected_bboxes:
-    #     #     inserto = pd.Series(detected_box)
-    #     #     print inserto
-    #     #     result.append(inserto, ignore_index=True)
-    #     result.to_csv('./validation_eval_input.csv', index=False)
-    # print result.info()
+    validation_dt_path = './submission.csv'
+
+    options = {
+        'num_rois': 32,
+        'network': 'resnet50',
+        'config_filename': './config.pickle',
+        'bboxes_output': validation_dt_path,
+        'cut_path': True
+    }
+
+    run_test(options, dataset)

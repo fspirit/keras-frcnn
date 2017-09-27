@@ -1,25 +1,16 @@
-import os
+import copy
 import gzip
+import os
 from itertools import chain
 
-import pandas as pd
 import cv2
-
-# import train_frcnn
-import test_frcnn
-
-import eval_challenge
-
-import numpy as np
-from torch.utils import data
-import os
-import matplotlib.pyplot as plt
-import random
-
-import copy
-
 import imgaug as ia
+import numpy as np
+import pandas as pd
+from torch.utils import data
+
 from imgaug import augmenters as iaa
+
 
 seq = iaa.Sequential([
     iaa.Fliplr(0.5),  # horizontal flips
@@ -50,6 +41,7 @@ seq = iaa.Sequential([
         translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)})
 ], random_order=True)  # apply augmenters in random order
 
+
 class ImgaugTransformFunction(object):
     def __init__(self, seq):
         self.seq = seq
@@ -78,6 +70,7 @@ class ImgaugTransformFunction(object):
 
         return (img_aug, bboxes_aug)
 
+
 class DatasetBase(data.Dataset):
 
     @staticmethod
@@ -93,6 +86,7 @@ class DatasetBase(data.Dataset):
         # x -= 0.5
         # x *= 2.
         return x
+
 
 class Nexar2DatasetBase(DatasetBase):
 
@@ -151,6 +145,7 @@ class Nexar2TrainDataset(Nexar2DatasetBase):
 
         return dict(img=img, boxes=bboxes)
 
+
 class Nexar2ValidationDataset(Nexar2DatasetBase):
 
     def select_boxes(self, boxes, validation_filenames):
@@ -161,8 +156,6 @@ class Nexar2ValidationDataset(Nexar2DatasetBase):
 
     def __getitem__(self, index):
         (image_path, boxes) = self.data[index]
-
-        print image_path
 
         img = cv2.imread(image_path)
         img = self._normalize(img)
@@ -175,42 +168,20 @@ class Nexar2ValidationDataset(Nexar2DatasetBase):
     def generate_gt_file(self, file_path):
         self.selected_boxes.to_csv(file_path, index=False)
 
+from os import listdir
+from os.path import isfile, join
 
-if __name__ == '__main__':
+class Nexar2TestDataset(Nexar2DatasetBase):
+    def __init__(self, images_dir):
+        self.files = [join(images_dir, f) for f in listdir(images_dir) if isfile(join(images_dir, f))]
 
-    dataset = Nexar2ValidationDataset('/Users/fs/Documents/Code/keras-frcnn/train_data/train_boxes.csv',
-                                      '/Users/fs/Documents/Code/keras-frcnn/train_data/img',
-                                      './val_filenames_test.txt')
+    def __getitem__(self, index):
+        image_path = self.files[index]
 
-    validation_dt_path = './validation_eval_input.csv'
-    validation_gt_path = './validation_eval_gt.csv'
+        img = cv2.imread(image_path)
+        img = self._normalize(img)
 
-    options = {
-        'num_rois': 32,
-        'network': 'resnet50',
-        'config_filename': './config.pickle',
-        'bboxes_output': validation_dt_path
-    }
+        return dict(img=img, image_path=image_path)
 
-    test_frcnn.run_test(options, dataset)
-
-    dataset.generate_gt_file(validation_gt_path)
-
-    iou_threshold = 0.75
-    print ('{}'.format(eval_challenge.eval_detector_csv(validation_gt_path,
-                                                        validation_dt_path,
-                                                        iou_threshold)))
-
-    # train_data_sets = [nexar_train_dataset]
-
-    # run train
-
-    # options = {
-    #     'num_rois': 32,
-    #     'network': 'resnet50',
-    #     'num_epochs': 100,
-    #     'config_filename': 'config.pickle',
-    #     'output_weight_path': './model_frcnn.hdf5'
-    # }
-
-    # train_frcnn.run(options)
+    def __len__(self):
+        return len(self.files)

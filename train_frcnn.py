@@ -9,6 +9,8 @@ from keras import backend as K
 from keras.optimizers import Adam
 from keras.layers import Input
 from keras.models import Model
+
+import datasets
 from keras_frcnn import config, data_generators, vgg, resnet
 
 import keras_frcnn.roi_helpers as roi_helpers
@@ -237,13 +239,13 @@ def construct_models(C, nn):
 	return model_all, model_classifier, model_rpn
 
 if __name__ == '__main__':
-	import nexar2_pipeline
+	import validate
     #
 	# dataset = nexar2_pipeline.Nexar2TrainDataset('/datadrive/nexar/train_boxes.csv',
 	#                                             '/datadrive/nexar/train/images',
 	#                                             './val_filenames_test.txt')
 	log('Loading dataset.')
-	dataset = nexar2_pipeline.Nexar2TrainDataset('/Users/fs/Documents/keras-frcnn/input.csv',
+	dataset = datasets.Nexar2TrainDataset('/Users/fs/Documents/keras-frcnn/input.csv',
 	                                            '/Users/fs/Documents/Code/keras-frcnn/train_data/img',
 	                                            './validation.filename.txt')
 
