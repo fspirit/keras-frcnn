@@ -199,7 +199,7 @@ def run_test(options, dataset):
         filepath = filepath_batch[0]
 
         # print img_batch.shape
-        print filepath
+        print str(index) + ' ' + filepath
 
         X, ratio = format_img_size(img, C)
 
@@ -221,7 +221,7 @@ def run_test(options, dataset):
         # apply the spatial pyramid pooling to the proposed regions
         class_bboxes, class_probs = find_objects(C, F, R, bbox_threshold, class_mapping, model_classifier)
 
-        print("{0} boxes found".format(len(class_bboxes)))
+
 
         all_dets = []
 
@@ -229,6 +229,7 @@ def run_test(options, dataset):
             new_boxes, new_probs = roi_helpers.non_max_suppression_fast(np.array(class_bboxes[class_name]),
                                                                         np.array(class_probs[class_name]),
                                                                         overlap_thresh=0.5)
+            print("{0} boxes found".format(len(new_boxes)))
 
             for jk in range(new_boxes.shape[0]):
                 (x1, y1, x2, y2) = new_boxes[jk, :]
