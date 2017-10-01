@@ -245,16 +245,26 @@ if __name__ == '__main__':
 	#                                             '/datadrive/nexar/train/images',
 	#                                             './val_filenames_test.txt')
 	log('Loading dataset.')
-	dataset = datasets.Nexar2TrainDataset('/Users/fs/Documents/keras-frcnn/input.csv',
+	nexar2_train = datasets.Nexar2TrainDataset('/Users/fs/Documents/keras-frcnn/input.csv',
 	                                            '/Users/fs/Documents/Code/keras-frcnn/train_data/img',
 	                                            './validation.filename.txt')
+
+	# udacity_ds = datasets.UdacityCrowdAIDataset('/datadrive/crowdai/crowdai_final.csv',
+	# 											'/datadrive/crowdai/')
+
+	udacity_ds = datasets.UdacityCrowdAIDataset('./crowdai_sample.csv',
+				 '/Users/fs/Downloads/crowdai/results_after')
+
+	from torch.utils import data
+
+	dataset = data.ConcatDataset([nexar2_train, udacity_ds])
 
 	options = {
 	    'num_rois': 32,
 		'num_epochs' : 1,
 	    'network': 'resnet50',
 	    'config_filename': './config.pickle',
-		'output_weight_path': './model_resnet50_nexar2ds_aug.hdf5'
+		'output_weight_path': './model_resnet50_leva.hdf5'
 	}
 
 	log('Starting training.')

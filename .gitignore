@@ -96,3 +96,5 @@ ENV/
 /results_imgs/
 /test/
 *.csv
+/results/
+/results_with_bboxes/
