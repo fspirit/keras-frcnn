@@ -18,8 +18,14 @@ from keras.models import Model
 
 import datasets
 
-sys.setrecursionlimit(40000)
+import logging
+logging.basicConfig(filename='test.log', level=logging.DEBUG)
 
+def log(msg):
+	print(msg)
+	logging.info(msg)
+
+sys.setrecursionlimit(40000)
 
 def format_img_size(img, C):
     """ formats the image size based on config """
@@ -176,6 +182,16 @@ def draw_box(all_dets, class_to_color, img, key, prob, bbox):
                   (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (255, 255, 255), -1)
     cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
+def save(boxes, options):
+    result = pd.DataFrame(columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
+
+    if len(boxes) != 0:
+        result = result.append(boxes)
+        if 'cut_path' in options and options['cut_path'] is True:
+            result['image_filename'] = result['image_filename'].apply(lambda f: os.path.basename(f))
+        result.to_csv(options['bboxes_output'], index=False)
+    else:
+        print "No boxes found!"
 
 def run_test(options, dataset):
 
@@ -190,6 +206,8 @@ def run_test(options, dataset):
     detected_bboxes = []
 
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
+
+    start_time = time.time()
 
     for index, item in enumerate(dataloader):
 
@@ -221,8 +239,6 @@ def run_test(options, dataset):
         # apply the spatial pyramid pooling to the proposed regions
         class_bboxes, class_probs = find_objects(C, F, R, bbox_threshold, class_mapping, model_classifier)
 
-
-
         all_dets = []
 
         for class_name in class_bboxes:
@@ -240,22 +256,13 @@ def run_test(options, dataset):
 
                 (real_x0, real_y0, real_x1, real_y1) = bbox
                 detected_bboxes.append({'image_filename': filepath, 'x0': real_x0, 'y0': real_y0,
-                                        'x1': real_x1, 'y1': real_y1,
-								        'label': 'car', 'confidence': new_probs[jk]})
+                                        'x1': real_x1, 'y1': real_y1, 'label': 'car', 'confidence': new_probs[jk]})
+        if index % 1000 == 0:
+            save(detected_bboxes, options)
+            time_elapsed = time.time() - start_time
+            log('Saving test results after ' + str(index) +'. Time elapsed for last 1000 = ' + str(time_elapsed))
+            start_time = time.time()
 
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # cv2.imwrite("./results_imgs/test{0}.jpg".format(index), img)
-        # print('Elapsed time = {}'.format(time.time() - st))
-
-    result = pd.DataFrame(columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
-
-    if len(detected_bboxes) != 0:
-        result = result.append(detected_bboxes)
-        if 'cut_path' in options and options['cut_path'] is True:
-            result['image_filename'] = result['image_filename'].apply(lambda f: os.path.basename(f))
-        result.to_csv(options['bboxes_output'], index=False)
-    else:
-        print "No boxes found!"
 
 if __name__ == "__main__":
 
@@ -263,7 +270,7 @@ if __name__ == "__main__":
 
     dataset = datasets.Nexar2TestDataset(test_images_path)
 
-    validation_dt_path = './submission.csv'
+    validation_dt_path = './submission_2.csv'
 
     options = {
         'num_rois': 32,
