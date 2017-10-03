@@ -129,6 +129,7 @@ class Nexar2TrainDataset(Nexar2DatasetBase):
 
         return dict(img=img, boxes=bboxes)
 
+
 class Nexar2AllTrainDataset(Nexar2DatasetBase):
 
     def __init__(self, annotations_path, images_dir, transform=None):
@@ -154,7 +155,7 @@ class Nexar2AllTrainDataset(Nexar2DatasetBase):
         bboxes = [[b['x0'], b['y0'], b['x1'], b['y1']] for b in bboxes]
         bboxes = np.array(bboxes)
 
-        return dict(img=img, boxes=bboxes)
+        return dict(img=img, boxes=bboxes, image_path=image_path)
 
 
 class Nexar2ValidationDataset(Nexar2DatasetBase):
@@ -181,6 +182,7 @@ class Nexar2ValidationDataset(Nexar2DatasetBase):
 
 from os import listdir
 from os.path import isfile, join
+
 
 class Nexar2TestDataset(Nexar2DatasetBase):
     def __init__(self, images_dir):
@@ -225,7 +227,7 @@ class UdacityCrowdAIDataset(DatasetBase):
 
         img = self._normalize(img)
 
-        return dict(img=img, boxes=bboxes)
+        return dict(img=img, boxes=bboxes, image_path=image_path)
 
     def __len__(self):
         return len(self.data)

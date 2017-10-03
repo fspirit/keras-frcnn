@@ -273,6 +273,8 @@ def get_anchor_gt(dataset, C, nn, backend):
 				img = img_batch[0].numpy()
 				boxes = boxes_batch[0]
 
+				print item['image_path'][0]
+
 				# print boxes
 				bboxes = [dict(x0=box[0], y0=box[1], x1=box[2], y1=box[3]) for box in boxes]
 				# print bboxes
